@@ -1,0 +1,18 @@
+services:
+
+  example-website:
+    image: nginx:1.26.1-alpine
+    container_name: "example-website"
+    volumes:
+      - ./html:/usr/share/nginx/html
+    networks:
+      - reverse-proxy_traefik-network
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.example-website.rule=Host(`example.website.${DOMAIN_NAME}`)
+      - traefik.http.routers.example-website.entrypoints=websecure
+      - traefik.http.routers.example-website.tls.certresolver=letsencrypt
+  
+networks:
+  reverse-proxy_traefik-network:
+    external: true

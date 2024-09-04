@@ -1,0 +1,60 @@
+name: Docker Image CICD
+run-name: "${{ github.event.head_commit.message }} (${{ github.sha }})"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  docker-build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      run: docker compose up --detach --wait --wait-timeout 30
+
+    - name: Tailscale connection
+      uses: tailscale/github-action@v2
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:cicd-pipeline
+
+    - name: SSH setup
+      run: |
+        mkdir -p ~/.ssh/
+        echo "$SSH_FINGERPRINT" > ~/.ssh/known_hosts
+        echo "$SSH_KEY" > ~/.ssh/srv.key
+        chmod 600 ~/.ssh/srv.key
+        cat >>~/.ssh/config <<END
+        Host srv
+          HostName $SSH_HOST
+          User $SSH_USER
+          IdentityFile ~/.ssh/srv.key
+          StrictHostKeyChecking yes
+        END
+      env:
+        SSH_USER: ${{ secrets.USERNAME }}
+        SSH_KEY: ${{ secrets.SSH_PRIV_KEY }}
+        SSH_HOST: ${{ secrets.TS_SERVER_IP }}
+        SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+
+    - name: Bring down Traefik container on server
+      continue-on-error: true
+      run: ssh srv 'cd ${{ github.event.repository.name }} && docker compose down'
+
+    - name: Delete directory on server
+      continue-on-error: true
+      run: ssh srv 'rm -rf ${{ github.event.repository.name }}'
+
+    - name: Deploy files
+      run: rsync -avh --exclude=".[!.]*" * srv:/root/${{ github.event.repository.name }}
+
+    - name: Bring up Traefik container on server
+      if: ${{ always() }}
+      run: ssh srv 'cd ${{ github.event.repository.name }} && docker compose up -d'
