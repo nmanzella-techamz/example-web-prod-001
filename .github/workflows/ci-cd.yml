@@ -10,7 +10,7 @@ on:
 jobs:
 
   docker-check-health:
-    name: Ensure Docker container passes health check
+    name: Docker health check
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
       run: docker compose up --detach --wait --wait-timeout 30
 
   deploy:
-    name: Deploy to the production server
+    name: Deploy to production
     runs-on: ubuntu-latest
     needs: docker-check-health
     steps:
@@ -54,7 +54,7 @@ jobs:
         SSH_HOST: ${{ secrets.TS_SERVER_IP }}
         SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
 
-    - name: Bring down Traefik container on server
+    - name: Bring down container on server
       run: ssh srv 'if [ -f ${{ github.event.repository.name }}/compose.yaml ]; then cd ${{ github.event.repository.name }} && docker compose down; fi '
 
     - name: Delete directory on server
